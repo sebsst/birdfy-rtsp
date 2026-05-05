@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.log
+.claude/
+birdfy_session.json
+birdfy_android_session.json

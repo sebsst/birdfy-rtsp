@@ -1,0 +1,26 @@
+name: Birdfy RTSP Proxy
+version: "1.0.0"
+slug: birdfy_rtsp
+description: Birdfy camera WebRTC to RTSP proxy via MediaMTX
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+startup: application
+boot: auto
+options:
+  email: ""
+  password: ""
+  rtsp_port: 8554
+schema:
+  email: str
+  password: str
+  rtsp_port: int
+ports:
+  8554/tcp: 8554
+ports_description:
+  8554/tcp: RTSP stream
+host_network: true
+map:
+  - config:rw
