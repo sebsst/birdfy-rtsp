@@ -131,7 +131,7 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
 
     with open(session_file) as f:
         session = json.load(f)
-    ticket = session.get("ticket", {})
+    ticket = session.get("ticket") or {}
     full_url    = ticket.get("wss_url", "")
     ice_servers = [] if no_turn else ticket.get("iceServer", [])
 

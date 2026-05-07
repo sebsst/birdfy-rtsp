@@ -4,7 +4,7 @@ set -e
 OPTIONS=/data/options.json
 SESSION=/config/birdfy_session.json
 
-EMAIL=$(python3 -c "import json; d=open('$OPTIONS').read(); import json; print(json.loads(d)['email'])")
+EMAIL=$(python3 -c "import json; print(json.loads(open('$OPTIONS').read())['email'])")
 PASSWORD=$(python3 -c "import json; print(json.loads(open('$OPTIONS').read())['password'])")
 RTSP_PORT=$(python3 -c "import json; print(json.loads(open('$OPTIONS').read()).get('rtsp_port', 8554))")
 
@@ -16,7 +16,7 @@ if [ ! -f "$SESSION" ]; then
     python3 /app/birdfy_login.py --email "$EMAIL" --password "$PASSWORD" --session "$SESSION"
 fi
 
-# Write MediaMTX config
+# Write MediaMTX config with on-demand stream
 cat > /tmp/mediamtx.yml << EOF
 logLevel: warn
 logDestinations: [stdout]
@@ -37,7 +37,8 @@ authInternalUsers:
     path:
 paths:
   birdfy:
-    source: publisher
+    runOnDemand: python3 /app/birdfy_rtsp.py --session $SESSION --rtsp-url rtsp://localhost:${RTSP_PORT}/birdfy --no-turn
+    runOnDemandCloseAfter: 10s
 EOF
 
 # Download mediamtx if not present
@@ -55,10 +56,6 @@ if [ ! -f /usr/local/bin/mediamtx ]; then
     chmod +x /usr/local/bin/mediamtx
 fi
 
-echo "[birdfy] Starting MediaMTX on port ${RTSP_PORT}..."
-mediamtx /tmp/mediamtx.yml &
-sleep 2
-
 echo "[birdfy] Starting events daemon..."
 python3 /app/birdfy_events_daemon.py \
     --session "$SESSION" \
@@ -68,5 +65,5 @@ python3 /app/birdfy_events_daemon.py \
     --password "$PASSWORD" \
     --interval 300 &
 
-echo "[birdfy] Starting proxy..."
-exec python3 /app/birdfy_rtsp.py --session "$SESSION" --rtsp-url "rtsp://localhost:${RTSP_PORT}/birdfy" --no-turn
+echo "[birdfy] Starting MediaMTX on port ${RTSP_PORT} (on-demand mode)..."
+exec mediamtx /tmp/mediamtx.yml

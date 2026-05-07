@@ -12,15 +12,15 @@ boot: auto
 options:
   email: ""
   password: ""
-  rtsp_port: 8554
+  rtsp_port: 8556
 schema:
   email: str
   password: str
   rtsp_port: int
 ports:
-  8554/tcp: 8554
+  8556/tcp: 8556
 ports_description:
-  8554/tcp: RTSP stream
+  8556/tcp: RTSP stream
 host_network: true
 map:
   - config:rw

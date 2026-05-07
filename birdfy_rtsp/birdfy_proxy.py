@@ -76,7 +76,7 @@ SIGNAL_HOST = "p-signal-262239938.smartvideogo.com"
 GROUP_ID    = "79a6e62743ab26b9400097d4f7eb402a"
 VIEWER_ID   = "362470"
 MODE        = "vicoo"
-VIEWER_TYPE = "netvue_web_sdk"
+VIEWER_TYPE = "a4x_sdk"
 
 
 class BirdfyClient:
