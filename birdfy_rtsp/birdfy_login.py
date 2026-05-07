@@ -227,6 +227,8 @@ async def main(email: str, password: str, **kwargs):
         "devices": devices,
         "webrtc": rtc_data,
         "ticket": ticket,
+        "email": kwargs.get("email", ""),
+        "password": kwargs.get("password", ""),
     }
     session_file = kwargs.get("session_file", "birdfy_session.json")
     with open(session_file, "w") as f:
@@ -255,6 +257,17 @@ async def refresh(session_file: str = "birdfy_session.json"):
     print(f"WebRTC: {json.dumps(rtc_data, indent=2)[:400]}")
 
     if rtc_data.get("ret") == "113" or not rtc_data.get("token"):
+        # Token expiré — re-login automatique si les credentials sont disponibles
+        email    = saved.get("email", "")
+        password = saved.get("password", "")
+        if email and password:
+            print("[token] Token expiré — re-login automatique...")
+            result = await main(email, password, session_file=session_file)
+            if result:
+                saved["ticket"] = result.get("ticket")
+                with open(session_file, "w") as f:
+                    json.dump(result, f, indent=2)
+            return
         raise Exception(f"Token Netvue expiré ({rtc_data.get('msg')}) — relancer avec --email/--password")
 
     devices = saved.get("devices", [])
@@ -309,6 +322,6 @@ if __name__ == "__main__":
     if args.refresh:
         asyncio.run(refresh(args.session))
     elif args.email and args.password:
-        asyncio.run(main(args.email, args.password, session_file=args.session))
+        asyncio.run(main(args.email, args.password, session_file=args.session, email=args.email, password=args.password))
     else:
         p.error("Fournir --email et --password, ou --refresh pour réutiliser la session existante")
