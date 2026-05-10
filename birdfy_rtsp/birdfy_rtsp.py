@@ -134,8 +134,7 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
             from birdfy_login import main as login_main
             log.info("Re-login avec les credentials de l'environnement...")
             try:
-                await login_main(email, password, session_file=session_file,
-                                 email=email, password=password)
+                await login_main(email, password, session_file=session_file)
             except Exception as e2:
                 log.error(f"Re-login echoue: {e2}")
         else:

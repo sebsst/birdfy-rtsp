@@ -229,8 +229,8 @@ async def main(email: str, password: str, **kwargs):
         "devices": devices,
         "webrtc": rtc_data,
         "ticket": ticket,
-        "email": kwargs.get("email", ""),
-        "password": kwargs.get("password", ""),
+        "email": kwargs.get("email", email),
+        "password": kwargs.get("password", password),
     }
     session_file = kwargs.get("session_file", "birdfy_session.json")
     with open(session_file, "w") as f:
