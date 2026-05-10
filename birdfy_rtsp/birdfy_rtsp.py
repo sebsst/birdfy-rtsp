@@ -132,8 +132,9 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
     with open(session_file) as f:
         session = json.load(f)
     ticket = session.get("ticket") or {}
-    full_url    = ticket.get("wss_url", "")
-    ice_servers = [] if no_turn else ticket.get("iceServer", [])
+    full_url         = ticket.get("wss_url", "")
+    ice_servers      = [] if no_turn else ticket.get("iceServer", [])
+    ping_interval    = ticket.get("signalPingInterval", 2)
 
     if not full_url:
         log.error("Pas d'URL WSS dans la session")
@@ -188,7 +189,8 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
             log.info(f"[pipe] {_fwd_count[0]} NAL -> ffmpeg stdin")
             _last_log[0] = now
 
-    client = BirdfyClient(full_url=full_url, ice_servers=ice_servers, on_rtp_packet=on_rtp_packet)
+    client = BirdfyClient(full_url=full_url, ice_servers=ice_servers, on_rtp_packet=on_rtp_packet,
+                          ping_interval=ping_interval)
     connect_task = asyncio.create_task(client.connect())
 
     try:

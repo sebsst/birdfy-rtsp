@@ -85,39 +85,58 @@ async def get_webrtc_token(token: str, userid: str, region: str = "eu-central-1"
     async with aiohttp.ClientSession() as s:
         async with s.get(url, headers=auth_headers(token, userid)) as r:
             return await r.json(content_type=None)
+_WEB_APP_BLOCK = {
+    "bundle": "com.netviewtech.mynetvue",
+    "channelId": 1000,
+    "appBuild": "online-build",
+    "appName": "Netvue",
+    "tenantId": "netvue",
+    "countlyId": "",
+    "version": 99999,
+    "appType": "iOS",
+}
+
+def _addx_headers(addx_bearer: str, region: str) -> dict:
+    return {
+        "Accept": "application/json",
+        "Accept-Charset": "UTF-8",
+        "Accept-Encoding": "gzip",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "x-nvs-a4x-region": region,
+        "Authorization": addx_bearer,
+    }
+
+async def select_single_device(addx_bearer: str, addx_sn: str, endpoint: str = "https://api-eu.vicohome.io", region: str = "eu-central-1") -> dict:
+    """Vérifie l'état de la caméra (équivalent au wakeup dans le flow web)."""
+    import uuid
+    url = f"{endpoint}/device/selectsingledevice"
+    body = {
+        "requestId": str(uuid.uuid4()),
+        "language": "fr",
+        "countryNo": "FR",
+        "serialNumber": addx_sn,
+        "app": _WEB_APP_BLOCK,
+    }
+    async with aiohttp.ClientSession() as s:
+        async with s.post(url, json=body, headers=_addx_headers(addx_bearer, region)) as r:
+            data = await r.json(content_type=None)
+            awake = data.get("data", {}).get("awake") if data.get("result") == 0 else None
+            print(f"selectsingledevice status={r.status} result={data.get('result')} awake={awake}")
+            return data
+
 async def wakeup_device(addx_bearer: str, addx_sn: str, endpoint: str = "https://api-eu.vicohome.io", region: str = "eu-central-1") -> None:
     """Réveille la caméra avant de demander le ticket WebRTC."""
     import uuid
     url = f"{endpoint}/device/wakeupDevice"
-    headers = {
-        "Accept": "application/json",
-        "Accept-Charset": "UTF-8",
-        "Accept-Encoding": "gzip",
-        "Authorization": addx_bearer,
-        "Content-Type": "application/json",
-        "User-Agent": "Birdfy/1.19.2 (build 123960) NetvueSDK/1.6.1 Android/12",
-        "x-nvs-a4x-region": region,
-    }
     body = {
-        "requestId": uuid.uuid4().hex,
-        "language": "en",
+        "requestId": str(uuid.uuid4()),
+        "language": "fr",
         "serialNumber": addx_sn,
-        "app": {
-            "bundle": "com.birdfy.smarthome",
-            "channelId": 1000,
-            "appBuild": "online-build",
-            "appName": "Birdfy",
-            "tenantId": "netvue",
-            "countlyId": "",
-            "version": 123960,
-            "appType": "Android",
-            "versionName": "1.19.2",
-            "env": "prod-k8s",
-            "timeZone": "",
-        },
+        "app": _WEB_APP_BLOCK,
     }
     async with aiohttp.ClientSession() as s:
-        async with s.post(url, json=body, headers=headers) as r:
+        async with s.post(url, json=body, headers=_addx_headers(addx_bearer, region)) as r:
             data = await r.json(content_type=None)
             print(f"wakeupDevice status={r.status} result={data.get('result')} msg={data.get('msg')}")
 
@@ -125,37 +144,16 @@ async def wakeup_device(addx_bearer: str, addx_sn: str, endpoint: str = "https:/
 async def get_webrtc_ticket(addx_bearer: str, addx_sn: str, endpoint: str = "https://api-eu.vicohome.io", region: str = "eu-central-1") -> dict:
     import uuid
     url = f"{endpoint}/device/getWebrtcTicket"
-    headers = {
-        "Accept": "application/json",
-        "Accept-Charset": "UTF-8",
-        "Accept-Encoding": "gzip",
-        "Authorization": addx_bearer,
-        "Connection": "Keep-Alive",
-        "Content-Type": "application/json",
-        "User-Agent": "Birdfy/1.19.2 (build 123960) NetvueSDK/1.6.1 Android/12",
-        "x-nvs-a4x-region": region,
-    }
     body = {
-        "requestId": uuid.uuid4().hex,
-        "language": "en",
+        "requestId": str(uuid.uuid4()),
+        "language": "fr",
+        "countryNo": "FR",
         "serialNumber": addx_sn,
         "verifyDormancyStatus": True,
-        "app": {
-            "bundle": "com.birdfy.smarthome",
-            "channelId": 1000,
-            "appBuild": "online-build",
-            "appName": "Birdfy",
-            "tenantId": "netvue",
-            "countlyId": "",
-            "version": 123960,
-            "appType": "Android",
-            "versionName": "1.19.2",
-            "env": "prod-k8s",
-            "timeZone": "",
-        },
+        "app": _WEB_APP_BLOCK,
     }
     async with aiohttp.ClientSession() as s:
-        async with s.post(url, json=body, headers=headers) as r:
+        async with s.post(url, json=body, headers=_addx_headers(addx_bearer, region)) as r:
             return await r.json(content_type=None)
 
 async def main(email: str, password: str, **kwargs):
@@ -191,9 +189,12 @@ async def main(email: str, password: str, **kwargs):
         addx_bearer = rtc_data.get("token", "")
         endpoint = rtc_data.get("endpoint", "https://api-eu.vicohome.io")
         if addx_sn and addx_bearer:
-            print(f"\n[4] Réveil caméra addxSn={addx_sn}...")
-            await wakeup_device(addx_bearer, addx_sn, endpoint, region)
-            await asyncio.sleep(2)
+            print(f"\n[4] Vérification état caméra addxSn={addx_sn}...")
+            dev_info = await select_single_device(addx_bearer, addx_sn, endpoint, region)
+            if dev_info.get("data", {}).get("awake") != 1:
+                print(f"\n[4b] Caméra endormie — réveil forcé...")
+                await wakeup_device(addx_bearer, addx_sn, endpoint, region)
+                await asyncio.sleep(2)
             print(f"\n[5] Ticket WebRTC pour addxSn={addx_sn}...")
             ticket_resp = await get_webrtc_ticket(addx_bearer, addx_sn, endpoint, region)
             print(f"Ticket: {json.dumps(ticket_resp, indent=2)[:600]}")
@@ -216,6 +217,7 @@ async def main(email: str, password: str, **kwargs):
                            f"&accessToken={access_jwt}&name=a4x")
                 print(f"\n✅ URL WSS:\n{wss_url[:300]}")
                 ticket["wss_url"] = wss_url
+                ticket["signalPingInterval"] = ticket.get("signalPingInterval", 2)
 
     result = {
         "token": token,
@@ -278,9 +280,12 @@ async def refresh(session_file: str = "birdfy_session.json"):
         addx_bearer = rtc_data.get("token", "")
         endpoint = rtc_data.get("endpoint", "https://api-eu.vicohome.io")
         if addx_sn and addx_bearer:
-            print(f"\n[4] Réveil caméra addxSn={addx_sn}...")
-            await wakeup_device(addx_bearer, addx_sn, endpoint, region)
-            await asyncio.sleep(2)
+            print(f"\n[4] Vérification état caméra addxSn={addx_sn}...")
+            dev_info = await select_single_device(addx_bearer, addx_sn, endpoint, region)
+            if dev_info.get("data", {}).get("awake") != 1:
+                print(f"\n[4b] Caméra endormie — réveil forcé...")
+                await wakeup_device(addx_bearer, addx_sn, endpoint, region)
+                await asyncio.sleep(2)
             print(f"\n[5] Ticket WebRTC pour addxSn={addx_sn}...")
             ticket_resp = await get_webrtc_ticket(addx_bearer, addx_sn, endpoint, region)
             print(f"Ticket: {json.dumps(ticket_resp, indent=2)[:400]}")
@@ -303,6 +308,7 @@ async def refresh(session_file: str = "birdfy_session.json"):
                            f"&accessToken={access_jwt}&name=a4x")
                 print(f"\nURL WSS:\n{wss_url[:300]}")
                 ticket["wss_url"] = wss_url
+                ticket["signalPingInterval"] = ticket.get("signalPingInterval", 2)
 
     saved["webrtc"] = rtc_data
     saved["ticket"] = ticket

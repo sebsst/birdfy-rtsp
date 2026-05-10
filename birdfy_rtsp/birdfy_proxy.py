@@ -83,11 +83,12 @@ class BirdfyClient:
     """Reproduit exactement le comportement du navigateur."""
 
     def __init__(self, access_token: str = "", full_url: str = "", ice_servers: list = None,
-                 on_rtp_packet=None):
+                 on_rtp_packet=None, ping_interval: int = 2):
         self.access_token   = access_token
         self._full_url      = full_url
         self._ice_servers   = ice_servers or []
         self.on_rtp_packet  = on_rtp_packet  # callback(data: bytes, addr) pour chaque paquet RTP vidéo
+        self._ping_interval = ping_interval
         self.pc: Optional[RTCPeerConnection] = None
         self.dc             = None
         self.session_id     = f"web-{VIEWER_ID}-{int(time.time()*1000)}"
@@ -342,14 +343,14 @@ class BirdfyClient:
         async with websockets.connect(
             url,
             additional_headers={
-                "Origin":     "https://my.netvue.com",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
+                "Origin":          "https://my.birdfy.com",
+                "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Cache-Control":   "no-cache",
+                "Pragma":          "no-cache",
             },
-            ping_interval=20,
-            ping_timeout=30,
+            ping_interval=self._ping_interval,
+            ping_timeout=max(self._ping_interval * 5, 10),
             close_timeout=5,
             max_size=10_000_000,
         ) as ws:
