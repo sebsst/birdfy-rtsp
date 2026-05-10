@@ -127,7 +127,19 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
     try:
         await refresh_ticket(session_file)
     except Exception as e:
-        log.warning(f"Refresh ticket echoue: {e} -- on reutilise l'ancien")
+        log.warning(f"Refresh ticket echoue: {e} -- tentative re-login")
+        email    = os.environ.get("BIRDFY_EMAIL", "")
+        password = os.environ.get("BIRDFY_PASSWORD", "")
+        if email and password:
+            from birdfy_login import main as login_main
+            log.info("Re-login avec les credentials de l'environnement...")
+            try:
+                await login_main(email, password, session_file=session_file,
+                                 email=email, password=password)
+            except Exception as e2:
+                log.error(f"Re-login echoue: {e2}")
+        else:
+            log.warning("Pas de credentials disponibles — on reutilise l'ancien ticket")
 
     with open(session_file) as f:
         session = json.load(f)

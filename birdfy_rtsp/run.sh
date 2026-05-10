@@ -37,7 +37,7 @@ authInternalUsers:
     path:
 paths:
   birdfy:
-    runOnDemand: python3 /app/birdfy_rtsp.py --session $SESSION --rtsp-url rtsp://localhost:${RTSP_PORT}/birdfy --no-turn
+    runOnDemand: env BIRDFY_EMAIL=${EMAIL} BIRDFY_PASSWORD=${PASSWORD} python3 /app/birdfy_rtsp.py --session $SESSION --rtsp-url rtsp://localhost:${RTSP_PORT}/birdfy --no-turn
     runOnDemandCloseAfter: 10s
 EOF
 
