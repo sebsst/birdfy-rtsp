@@ -328,6 +328,6 @@ if __name__ == "__main__":
     if args.refresh:
         asyncio.run(refresh(args.session))
     elif args.email and args.password:
-        asyncio.run(main(args.email, args.password, session_file=args.session, email=args.email, password=args.password))
+        asyncio.run(main(args.email, args.password, session_file=args.session))
     else:
         p.error("Fournir --email et --password, ou --refresh pour réutiliser la session existante")
