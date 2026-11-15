@@ -1,5 +1,5 @@
 name: Birdfy RTSP Proxy
-version: "1.0.5"
+version: "1.1.0"
 slug: birdfy_rtsp
 description: Birdfy camera WebRTC to RTSP proxy via MediaMTX
 arch:
@@ -13,14 +13,18 @@ options:
   email: ""
   password: ""
   rtsp_port: 8556
+  rtsp_username: ""
+  rtsp_password: ""
+  use_turn: false
+  events: true
 schema:
-  email: str
-  password: str
-  rtsp_port: int
-ports:
-  8556/tcp: 8556
-ports_description:
-  8556/tcp: RTSP stream
+  email: email
+  password: password
+  rtsp_port: port
+  rtsp_username: str?
+  rtsp_password: password?
+  use_turn: bool
+  events: bool
 host_network: true
 map:
   - config:rw

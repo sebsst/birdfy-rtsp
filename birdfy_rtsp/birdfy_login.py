@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Login automatique Netvue pour obtenir le token WebRTC sans navigateur.
-Usage: python birdfy_login.py --email xxx --password yyy
+Usage: python birdfy_login.py --login [--session FILE]   (credentials from /data/options.json)
 """
 import asyncio
 import aiohttp
@@ -10,6 +10,11 @@ import hmac
 import time
 import json
 import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from secure_store import load_credentials, write_private_json
 
 # Constantes API Netvue (identiques à l'intégration HA)
 UCID = "b3cf543b57"
@@ -69,7 +74,6 @@ async def login(email: str, password: str) -> dict:
         async with s.post(LOGIN_URL, json=payload, headers=LOGIN_HEADERS) as r:
             data = await r.json(content_type=None)
             print(f"Login status: {r.status}")
-            print(f"Login response: {json.dumps(data, indent=2)[:800]}")
             return data
 
 async def get_devices(token: str, userid: str, local_endpoint: str = "https://localweb.nvts.co") -> list:
@@ -77,7 +81,7 @@ async def get_devices(token: str, userid: str, local_endpoint: str = "https://lo
     async with aiohttp.ClientSession() as s:
         async with s.get(url, headers=auth_headers(token, userid)) as r:
             data = await r.json(content_type=None)
-            print(f"Devices response: {json.dumps(data, indent=2)[:400]}")
+            print(f"Devices status: {r.status}")
             return data.get("devices", data.get("data", {}).get("deviceList", data.get("deviceList", [])))
 
 async def get_webrtc_token(token: str, userid: str, region: str = "eu-central-1") -> dict:
@@ -157,7 +161,7 @@ async def get_webrtc_ticket(addx_bearer: str, addx_sn: str, endpoint: str = "htt
             return await r.json(content_type=None)
 
 async def main(email: str, password: str, **kwargs):
-    print(f"[1] Login {email}...")
+    print("[1] Login...")
     login_data = await login(email, password)
 
     # La réponse contient directement le token sans champ "code"
@@ -170,16 +174,16 @@ async def main(email: str, password: str, **kwargs):
         print(f"❌ Login échoué: pas de token dans la réponse")
         return None
 
-    print(f"✅ Login OK — userid={userid} region={region} token={token[:40]}...")
+    print(f"✅ Login OK — region={region}")
 
     print(f"\n[2] Récupération des appareils ({local_endpoint})...")
     devices = await get_devices(token, userid, local_endpoint)
     for d in devices:
-        print(f"  - {d.get('deviceName','?')} id={d.get('deviceId','?')} group={d.get('groupId','?')}")
+        print(f"  - {d.get('deviceName','?')}")
 
     print(f"\n[3] Token WebRTC (région {region})...")
     rtc_data = await get_webrtc_token(token, userid, region)
-    print(f"WebRTC: {json.dumps(rtc_data, indent=2)[:600]}")
+    print(f"WebRTC token: {'ok' if rtc_data.get('token') else 'missing'}")
 
     # [4] Ticket WebRTC (sign + time + ICE servers)
     ticket = None
@@ -189,15 +193,15 @@ async def main(email: str, password: str, **kwargs):
         addx_bearer = rtc_data.get("token", "")
         endpoint = rtc_data.get("endpoint", "https://api-eu.vicohome.io")
         if addx_sn and addx_bearer:
-            print(f"\n[4] Vérification état caméra addxSn={addx_sn}...")
+            print("\n[4] Vérification état caméra...")
             dev_info = await select_single_device(addx_bearer, addx_sn, endpoint, region)
             if dev_info.get("data", {}).get("awake") != 1:
                 print(f"\n[4b] Caméra endormie — réveil forcé...")
                 await wakeup_device(addx_bearer, addx_sn, endpoint, region)
                 await asyncio.sleep(2)
-            print(f"\n[5] Ticket WebRTC pour addxSn={addx_sn}...")
+            print("\n[5] Ticket WebRTC...")
             ticket_resp = await get_webrtc_ticket(addx_bearer, addx_sn, endpoint, region)
-            print(f"Ticket: {json.dumps(ticket_resp, indent=2)[:600]}")
+            print(f"Ticket: result={ticket_resp.get('result')}")
             ticket = ticket_resp.get("data")
             if ticket:
                 sign_raw = ticket.get("sign", "")
@@ -215,7 +219,7 @@ async def main(email: str, password: str, **kwargs):
                 wss_url = (f"{signal_server}/{gid}/viewer/{vid}"
                            f"?traceId={trace_id}&time={t}&sign={sign_part}"
                            f"&accessToken={access_jwt}&name=a4x")
-                print(f"\n✅ URL WSS:\n{wss_url[:300]}")
+                print("\n✅ URL WSS prête")
                 ticket["wss_url"] = wss_url
                 ticket["signalPingInterval"] = ticket.get("signalPingInterval", 2)
 
@@ -229,12 +233,9 @@ async def main(email: str, password: str, **kwargs):
         "devices": devices,
         "webrtc": rtc_data,
         "ticket": ticket,
-        "email": kwargs.get("email", email),
-        "password": kwargs.get("password", password),
     }
     session_file = kwargs.get("session_file", "birdfy_session.json")
-    with open(session_file, "w") as f:
-        json.dump(result, f, indent=2)
+    write_private_json(session_file, result)
     print(f"\nSession sauvegardee dans {session_file}")
     return result
 
@@ -252,23 +253,18 @@ async def refresh(session_file: str = "birdfy_session.json"):
         print("❌ Pas de token dans la session — lance d'abord avec --email/--password")
         return
 
-    print(f"[token] Réutilisation token={token[:40]}... userid={userid}")
+    print("[token] Réutilisation du token existant")
 
     print(f"\n[3] Token WebRTC (région {region})...")
     rtc_data = await get_webrtc_token(token, userid, region)
-    print(f"WebRTC: {json.dumps(rtc_data, indent=2)[:400]}")
+    print(f"WebRTC token: {'ok' if rtc_data.get('token') else 'missing'}")
 
     if rtc_data.get("ret") == "113" or not rtc_data.get("token"):
         # Token expiré — re-login automatique si les credentials sont disponibles
-        email    = saved.get("email", "")
-        password = saved.get("password", "")
+        email, password = load_credentials()
         if email and password:
             print("[token] Token expiré — re-login automatique...")
-            result = await main(email, password, session_file=session_file)
-            if result:
-                saved["ticket"] = result.get("ticket")
-                with open(session_file, "w") as f:
-                    json.dump(result, f, indent=2)
+            await main(email, password, session_file=session_file)
             return
         raise Exception(f"Token Netvue expiré ({rtc_data.get('msg')}) — relancer avec --email/--password")
 
@@ -280,15 +276,15 @@ async def refresh(session_file: str = "birdfy_session.json"):
         addx_bearer = rtc_data.get("token", "")
         endpoint = rtc_data.get("endpoint", "https://api-eu.vicohome.io")
         if addx_sn and addx_bearer:
-            print(f"\n[4] Vérification état caméra addxSn={addx_sn}...")
+            print("\n[4] Vérification état caméra...")
             dev_info = await select_single_device(addx_bearer, addx_sn, endpoint, region)
             if dev_info.get("data", {}).get("awake") != 1:
                 print(f"\n[4b] Caméra endormie — réveil forcé...")
                 await wakeup_device(addx_bearer, addx_sn, endpoint, region)
                 await asyncio.sleep(2)
-            print(f"\n[5] Ticket WebRTC pour addxSn={addx_sn}...")
+            print("\n[5] Ticket WebRTC...")
             ticket_resp = await get_webrtc_ticket(addx_bearer, addx_sn, endpoint, region)
-            print(f"Ticket: {json.dumps(ticket_resp, indent=2)[:400]}")
+            print(f"Ticket: result={ticket_resp.get('result')}")
             ticket = ticket_resp.get("data")
             if ticket:
                 sign_raw = ticket.get("sign", "")
@@ -306,28 +302,32 @@ async def refresh(session_file: str = "birdfy_session.json"):
                 wss_url = (f"{signal_server}/{gid}/viewer/{vid}"
                            f"?traceId={trace_id}&time={t}&sign={sign_part}"
                            f"&accessToken={access_jwt}&name=a4x")
-                print(f"\nURL WSS:\n{wss_url[:300]}")
+                print("\nURL WSS prête")
                 ticket["wss_url"] = wss_url
                 ticket["signalPingInterval"] = ticket.get("signalPingInterval", 2)
 
     saved["webrtc"] = rtc_data
     saved["ticket"] = ticket
-    with open(session_file, "w") as f:
-        json.dump(saved, f, indent=2)
+    saved.pop("email", None)
+    saved.pop("password", None)
+    write_private_json(session_file, saved)
     print("\nSession rafraichie dans", session_file)
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--email")
-    p.add_argument("--password")
+    p.add_argument("--login", action="store_true", help="Login avec les identifiants de /data/options.json")
     p.add_argument("--refresh", action="store_true", help="Rafraîchir le ticket sans re-login")
     p.add_argument("--session", default="birdfy_session.json")
     args = p.parse_args()
 
     if args.refresh:
         asyncio.run(refresh(args.session))
-    elif args.email and args.password:
-        asyncio.run(main(args.email, args.password, session_file=args.session, email=args.email, password=args.password))
+    elif args.login:
+        email, password = load_credentials()
+        if not (email and password):
+            p.error("email/password manquants dans la configuration de l'app")
+        if asyncio.run(main(email, password, session_file=args.session)) is None:
+            sys.exit(1)
     else:
-        p.error("Fournir --email et --password, ou --refresh pour réutiliser la session existante")
+        p.error("Fournir --login ou --refresh")

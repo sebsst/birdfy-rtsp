@@ -129,11 +129,11 @@ async def one_session(session_file: str, rtsp_url: str, no_turn: bool) -> bool:
         log.info("Ticket WebRTC rafraichi avec succes")
     except Exception as e:
         log.warning(f"Refresh ticket echoue: {e} -- tentative re-login")
-        email    = os.environ.get("BIRDFY_EMAIL", "")
-        password = os.environ.get("BIRDFY_PASSWORD", "")
+        from secure_store import load_credentials
+        email, password = load_credentials()
         if email and password:
             from birdfy_login import main as login_main
-            log.info("Re-login avec les credentials de l'environnement...")
+            log.info("Re-login avec les identifiants de la configuration...")
             try:
                 await login_main(email, password, session_file=session_file)
                 log.info("Re-login reussi")

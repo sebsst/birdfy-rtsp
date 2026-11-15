@@ -338,7 +338,7 @@ class BirdfyClient:
 
         # WebSocket
         url = self._wss_url()
-        log.info(f"WS → {url[:90]}…")
+        log.info(f"WS → {url.split('?', 1)[0].split('/')[2]}…")
 
         async with websockets.connect(
             url,

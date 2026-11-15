@@ -12,9 +12,13 @@ import logging
 import os
 import time
 import aiohttp
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from secure_store import load_credentials, write_private_json, device_udid
 
 UCID = "b3cf543b57"
-UDID = "android-10aa8cf1-d060-4333-b738-f541f07b65ae"
+UDID = device_udid()
 API_BASE  = "https://eu-central-1-api2.nvts.co"
 LOGIN_URL = "https://localweb.nvts.co/v1/users/login/v2"
 
@@ -73,7 +77,7 @@ async def android_login(email: str, password: str) -> dict:
         async with s.post(LOGIN_URL, json=payload, headers=headers) as r:
             data = await r.json(content_type=None)
             if data.get("ret", 0) != 0:
-                raise RuntimeError(f"Login failed: {data}")
+                raise RuntimeError(f"Login failed: ret={data.get('ret')}")
             return data
 
 
@@ -131,8 +135,7 @@ async def load_session(session_file: str, android_session_file: str, email: str,
     if not token and email and password:
         log.info("Android login...")
         s = await android_login(email, password)
-        with open(android_session_file, "w") as f:
-            json.dump(s, f, indent=2)
+        write_private_json(android_session_file, s)
         token  = s["token"]
         userid = str(s["userID"])
 
@@ -189,18 +192,17 @@ async def poll_once(token: str, userid: str, device_id: str, output_file: str,
 async def main():
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--session",          default="/config/birdfy_session.json")
-    p.add_argument("--android-session",  default="/config/birdfy_android_session.json")
+    p.add_argument("--session",          default="/data/birdfy_session.json")
+    p.add_argument("--android-session",  default="/data/birdfy_android_session.json")
     p.add_argument("--output",           default="/config/birdfy_events.json")
-    p.add_argument("--email",            default=os.environ.get("BIRDFY_EMAIL", ""))
-    p.add_argument("--password",         default=os.environ.get("BIRDFY_PASSWORD", ""))
     p.add_argument("--interval",         type=int, default=POLL_INTERVAL)
     args = p.parse_args()
+    args.email, args.password = load_credentials()
 
     token, userid, device_id = await load_session(
         args.session, args.android_session, args.email, args.password
     )
-    log.info(f"Device: {device_id}  user: {userid}")
+    log.info("Events daemon démarré")
 
     while True:
         try:
